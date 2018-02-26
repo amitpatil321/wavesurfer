@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Wave</title>
+    <script type="text/javascript" src="http://code.jquery.com/jquery-3.3.1.js"></script>
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/wavesurfer.js/1.4.0/wavesurfer.min.js"></script>
+    <style type="text/css">
+        .waveholder{
+           display: table;
+           border: 1px solid #888;
+           height : 30px;
+        }
+        .waveholder div{
+          display: table-cell;
+          border: 1px solid #eee;
+        }
+        .wave{
+            border-right: 2px solid #000;
+        }
+    </style>
+</head>
+<body>
+    <button class="playpause" data-state="paused">Play</button>
+    <div class="waveholder" style="width:800px">
+    </div>
+    <div class="progress"></div>
+</body>
+</html>
+<script>
+var wavesurfer = undefined;
+var playpause, history, summary, btn_report, progress, btn_summary, reportname;
+var myLine = {}, newname, oldname, json = {}, wave = [];
+var prev, current = undefined;
+var chunks = [], next = 0;
+
+$(document).ready(function(){
+    chunks = [
+        'http://localhost/raw/wave/media/audio/blob_2KjnMjp',
+        'http://localhost/raw/wave/media/audio/blob_4edlv9Y',
+        'http://localhost/raw/wave/media/audio/blob_4KmjLRn',
+        'http://localhost/raw/wave/media/audio/blob_9DxR5FV',
+        'http://localhost/raw/wave/media/audio/blob_BIjnRif',
+        'http://localhost/raw/wave/media/audio/blob_bQRCjcb',
+        'http://localhost/raw/wave/media/audio/blob_bZC04Xj',
+        'http://localhost/raw/wave/media/audio/blob_dJ1lrIp'
+        // 'http://localhost/raw/wave/media/audio/blob_FVdwwpN',
+        // 'http://localhost/raw/wave/media/audio/blob_ZUL0aCw',
+        // 'http://localhost/raw/wave/media/audio/blob_JqIeXyZ',
+        // 'http://localhost/raw/wave/media/audio/blob_3N2HhTx',
+        // 'http://localhost/raw/wave/media/audio/blob_DmGX9hS',
+        // 'http://localhost/raw/wave/media/audio/blob_7U59UhG',
+        // 'http://localhost/raw/wave/media/audio/blob_E09hWDS',
+        // 'http://localhost/raw/wave/media/audio/blob_UkpbEiR'
+    ];
+
+    $.each(chunks, function(index, value){
+        $(".waveholder").append("<div class='wave waveform"+index+"' id='"+index+"' style='"+parseInt($(".waveholder").width() / chunks.length)+"'></div>")
+    });
+
+    // on block click
+    $(".wave").click(function(){
+        var index = $(this).attr("id");
+        if(wave[index] == undefined){
+            wave[index] = WaveSurfer.create({
+                container: '.waveform'+index,
+                barHeight : 0.5,
+                height : 60,
+                responsive : true,
+                autoCenter : true,
+                hideScrollbar : true,
+                waveColor: 'lightgreen',
+                cursorColor : 'lightgreen',
+                progressColor : 'green',
+                cursorWidth : 0
+              });
+
+            wave[index].load(chunks[index]);
+            on_ready(index);
+            // attach all events
+            // attach_events(index);
+        }
+    });
+
+    // If user clicks on currently plygin waveform, do nothing as it will be handled by plugin itself
+    // If user clicks on other wave then stop currently playing waveform and play clicked wave
+    $(document).on("click",'.wave',function(){
+        var index = $(this).attr("id");
+        if(current != index){
+            if(wave[current] != undefined){
+                wave[current].stop();
+                wave[index].play();
+                current = index;
+                // clear others
+                clear_others(index);
+                reset_wave(index);
+                // attach all events
+                attach_events(index);
+            }
+        }
+    });
+});
+
+attach_events = function(index){
+    on_ready(index);
+}
+
+on_ready = function(index){
+    wave[index].on('ready', function () {
+        // stop other clip from playing if any and start clicked one
+        if(current != undefined && wave[current].isPlaying()){
+            wave[current].pause()
+        }
+        wave[index].play();
+        current = index;
+
+        $(".playpause").data("state","playing").html("Pause");
+    });
+    // load next audio click when current audio reaches to 50 seconds and above
+    on_process(index);
+    // play next audio as soon as current one finishes
+    on_finish(index);
+}
+
+on_process = function(index){
+    wave[index].on('audioprocess', function(seconds){
+        $(".progress").html(Math.round(seconds)+"%");
+        if(seconds >= 50){
+            if(wave[next] == undefined){
+                next = parseInt(index) + 1;
+                wave[next] = WaveSurfer.create({
+                    container: '.waveform'+next,
+                    barHeight : 0.5,
+                    height : 60,
+                    responsive : true,
+                    autoCenter : true,
+                    hideScrollbar : true,
+                    waveColor: 'lightgreen',
+                    cursorColor : 'lightgreen',
+                    progressColor : 'green',
+                    cursorWidth : 0
+                  });
+
+                wave[next].load(chunks[next]);
+
+                // on_ready(index);
+                //attach_events(next);
+            }
+        }
+    });
+}
+
+on_finish = function(index){
+    wave[index].on('finish', function(seconds){
+        current = next;
+        wave[current].play();
+    });
+}
+
+// play pause button click event
+$(".playpause").click(function () {
+    if($(this).data("state") == "playing"){
+        wave[current].pause();
+        $(".playpause").data("state","paused").html("play");
+    }else{
+        wave[current].play();
+        $(".playpause").data("state","playing").html("Pause");
+    }
+});
+
+// apply lighgreen color to others exept current
+function clear_others(index){
+  // c(index);
+  // c(wave[index].isPlaying());
+  $.each(wave, function(index, value){
+      // Set dark color for current file, and male others inactive
+      if(index != current && wave[index] != undefined){
+        wave[index].params.progressColor = 'lightgreen';
+        wave[index].drawBuffer();
+      }
+  })
+}
+
+// returns currently playing wave id(index)
+function reset_wave(index){
+    // wave[index].params.progressColor = 'green';
+    // wave[index].drawBuffer();
+}
+
+function c(str){
+    console.log(str);
+}
+</script>
